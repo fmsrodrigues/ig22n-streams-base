@@ -1,35 +1,28 @@
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
-
-import { Database } from './database.js';
 
 import { json } from './middlewares/json.js';
 
-const database = new Database();
+import { routes } from './routes.js';
+
+import { extractQueryParamas } from './utils/extract-query-params.js';
 
 const server = http.createServer(async (req, res) => {
   const { method, url } = req;
 
   await json(req, res)
 
-  if(method === "GET" && url === "/users") {
-    const users = database.select("users");
+  const route = routes.find(route => {
+    return route.method === method && route.path.test(url);
+  });
 
-    return res.end(JSON.stringify(users))
-  }
-  
-  if(method === "POST" && url === "/users") {
-    const { name, email } = req.body;
+  if(route) {
+    const routeParams = req.url.match(route.path);
 
-    const user = {
-      id: randomUUID(),
-      name,
-      email
-    }
+    const { query, ...params } = routeParams.groups;
+    req.query = query ? extractQueryParamas(query) : {};
+    req.params = params;
 
-    database.insert('users', user);
-
-    return res.writeHead(201).end()
+    return route.handler(req, res);
   }
 
   return res.writeHead(404).end()
